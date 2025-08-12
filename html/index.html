@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Player Center</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    :root{ --panel:#121212; --muted:#b7b7b7; --text:#e7e7e7; --accent:#ff6600; --accent-2:#ff7a26; --border:#2a2a2a; --danger:#ff3b3b }
+    *{ box-sizing:border-box }
+    html,body{ margin:0; padding:0; background:transparent; color:var(--text);
+      font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial,"Noto Sans","Apple Color Emoji","Segoe UI Emoji" }
+    .hidden{ display:none!important }
+    #app{ position:fixed; inset:0; display:grid; place-items:center; background:rgba(0,0,0,.35) }
+
+    .panel{ width:min(1000px,96vw); max-height:86vh; background:var(--panel); border:1px solid var(--border);
+      border-radius:18px; box-shadow:0 10px 40px rgba(0,0,0,.7); overflow:hidden }
+    .panel-header{ display:flex; align-items:center; justify-content:space-between; padding:12px 14px;
+      border-bottom:1px solid var(--border); background:linear-gradient(180deg, rgba(255,102,0,.08), rgba(0,0,0,0)) }
+    .head-left{ display:flex; align-items:center; gap:12px }
+    .title{ font-size:18px; font-weight:800; letter-spacing:.3px }
+    .tabs{ display:flex; gap:6px; flex-wrap:wrap }
+    .tab{ border:1px solid var(--border); background:#1a1a1a; color:var(--text); padding:8px 12px; border-radius:10px; font-size:13px; cursor:pointer }
+    .tab.active{ border-color:var(--accent); color:var(--accent) }
+    .close-btn{ width:36px; height:36px; border-radius:10px; border:1px solid var(--border); background:#1a1a1a; color:var(--text); font-size:20px; cursor:pointer }
+    .close-btn:hover{ border-color:var(--accent); color:var(--accent) }
+    .panel-content{ padding:10px 14px 16px }
+
+    .loading,.empty{ color:var(--muted); text-align:center; padding:32px 0; font-size:15px }
+    .list{ list-style:none; margin:0; padding:0; overflow:auto; max-height:calc(86vh - 160px) }
+    .item{ display:flex; align-items:center; gap:12px; border:1px solid var(--border); border-radius:14px; padding:12px; margin:10px 4px; background:#151515 }
+    .badge{ min-width:28px; height:28px; display:grid; place-items:center; border-radius:8px; background:linear-gradient(135deg, var(--accent), var(--accent-2)); color:#fff; font-weight:800; font-size:12px }
+    .reason{ flex:1; display:flex; flex-direction:column; gap:6px }
+    .reason .tt{ font-size:15px; font-weight:700 }
+    .meta{ font-size:12px; color:var(--muted) }
+    .actions{ display:flex; align-items:center; gap:8px }
+    .btn{ border:1px solid var(--border); background:#1b1b1b; color:#e7e7e7; padding:8px 12px; border-radius:10px; font-size:13px; cursor:pointer }
+    .btn:hover{ border-color:var(--accent); color:var(--accent) }
+    .btn-danger{ border-color:#3a1e1e; background:#221414 }
+    .btn-danger:hover{ border-color:var(--danger); color:var(--danger) }
+
+    .toast{ position:absolute; right:14px; top:60px; background:#151515; border:1px solid var(--border); padding:10px 12px; border-radius:10px; font-size:13px; color:var(--text) }
+    .toast.success{ border-color:#214121 } .toast.error{ border-color:#4a2121 }
+
+    /* Forms */
+    .form{ display:flex; flex-direction:column; gap:12px; max-height:calc(86vh - 170px); overflow:auto }
+    .row{ display:flex; gap:10px; flex-wrap:wrap }
+    .field{ flex:1; min-width:220px; display:flex; flex-direction:column; gap:6px }
+    .label{ font-size:12px; color:var(--muted) }
+    .input, .select, .textarea{ width:100%; border:1px solid var(--border); background:#141414; color:var(--text); padding:10px 12px; border-radius:10px; font-size:14px }
+    .textarea{ min-height:120px; resize:vertical }
+    .actions-bar{ display:flex; justify-content:flex-end; gap:10px }
+
+    /* Chat */
+    .chat{ display:flex; flex-direction:column; gap:8px; border:1px solid var(--border); border-radius:14px; padding:10px; background:#151515; max-height:240px; overflow:auto }
+    .bubble{ padding:8px 10px; border-radius:10px; background:#1d1d1d; border:1px solid #2a2a2a; font-size:13px }
+    .bubble.staff{ border-color:#3a2b1e; background:linear-gradient(180deg, #1d1d1d, #181818) }
+    .bubble .meta{ font-size:11px; color:var(--muted); margin-bottom:4px }
+    .chat-row{ display:flex; gap:8px } .chat-input{ flex:1; }
+
+    /* Tables */
+    .table{ width:100%; border-collapse:collapse; font-size:13px; margin-top:8px }
+    .table th, .table td{ border:1px solid var(--border); padding:8px 10px; text-align:left }
+    .table th{ background:#1b1b1b; font-weight:700 }
+    .muted{ color:var(--muted); font-size:12px }
+
+    /* Logs extras */
+    .logs-tools { display:flex; gap:8px; align-items:flex-end; margin-bottom:10px; }
+    .select { padding: 6px 8px; border-radius:10px; border:1px solid var(--border); background:#141414; color:var(--text); }
+  </style>
+</head>
+<body>
+  <div id="app" class="hidden">
+    <div class="panel">
+      <div class="panel-header">
+        <div class="head-left">
+          <div class="title">Player Center</div>
+          <div class="tabs">
+            <button id="tabWarnings" class="tab active">Warnings</button>
+            <button id="tabReport" class="tab">Report</button>
+            <button id="tabManager" class="tab hidden">Report Manager</button>
+            <button id="tabWarnMgr" class="tab hidden">Warn Manager</button>
+            <button id="tabTools"   class="tab hidden">Staff Tools</button>
+            <!-- NEW: Logs tab (staff only) -->
+            <button id="tabLogs"    class="tab hidden">Live Logs</button>
+          </div>
+        </div>
+        <button class="close-btn" id="closeBtn" aria-label="Close">×</button>
+      </div>
+
+      <div id="toast" class="toast hidden"></div>
+
+      <div class="panel-content">
+        <!-- Warnings (player) -->
+        <div id="warningsPane">
+          <div id="loading" class="loading">Loading…</div>
+          <ul id="list" class="list hidden"></ul>
+          <div id="empty" class="empty hidden">No warnings found 🎉</div>
+        </div>
+
+        <!-- Report (player) -->
+        <div id="reportPane" class="hidden">
+          <form id="reportForm" class="form">
+            <div class="row">
+              <div class="field">
+                <div class="label">Player ID (optional)</div>
+                <input class="input" id="targetId" placeholder="Server ID of the player you’re reporting" />
+              </div>
+              <div class="field">
+                <div class="label">Category</div>
+                <select id="category" class="select">
+                  <option value="">General</option><option>RDM/VDM</option><option>Fail RP</option><option>Toxicity</option><option>Exploiting</option><option>Other</option>
+                </select>
+              </div>
+            </div>
+            <div class="field">
+              <div class="label">Details</div>
+              <textarea id="details" class="textarea" placeholder="Describe what happened..." maxlength="2000"></textarea>
+            </div>
+            <div class="actions-bar">
+              <button type="button" id="submitReport" class="btn">Submit report</button>
+            </div>
+          </form>
+
+          <div id="myTicket" class="hidden" style="margin-top:12px;">
+            <div class="label">Your ticket</div>
+            <div id="myTicketStatus" class="meta">Open</div>
+            <div id="myChat" class="chat" style="margin-top:8px;"></div>
+            <div class="chat-row" style="margin-top:6px;">
+              <input id="myChatInput" class="input chat-input" placeholder="Message staff..." />
+              <button id="myChatSend" class="btn">Send</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Report Manager (staff) -->
+        <div id="managerPane" class="hidden">
+          <div class="row" style="margin-bottom:10px;">
+            <button id="refreshManager" class="btn">Refresh</button>
+          </div>
+          <ul id="managerList" class="list"></ul>
+
+          <div id="managerChatWrap" class="hidden" style="margin-top:10px;">
+            <div class="label">Ticket #<span id="mgrTicketId"></span> chat</div>
+            <div id="mgrChat" class="chat"></div>
+            <div class="chat-row" style="margin-top:6px;">
+              <input id="mgrChatInput" class="input chat-input" placeholder="Message reporter..." />
+              <button id="mgrChatSend" class="btn">Send</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Warn Manager (staff) -->
+        <div id="warnMgrPane" class="hidden">
+          <form id="warnForm" class="form">
+            <div class="row">
+              <div class="field">
+                <div class="label">Player ID</div>
+                <input id="warnTargetId" class="input" placeholder="Server ID (required)" />
+              </div>
+            </div>
+            <div class="field">
+              <div class="label">Reason</div>
+              <textarea id="warnReason" class="textarea" placeholder="Reason for the warning..." maxlength="2000"></textarea>
+            </div>
+            <div class="actions-bar">
+              <button type="button" id="createWarningBtn" class="btn">Create Warning</button>
+            </div>
+          </form>
+
+          <div class="row" style="margin-top:8px; align-items:flex-end;">
+            <div class="field" style="max-width:360px;">
+              <div class="label">Search warnings</div>
+              <input id="warnSearch" class="input" placeholder="Filter by identifier/sender/reason..." />
+            </div>
+            <button id="refreshWarns" class="btn">Refresh</button>
+          </div>
+
+          <table class="table" id="warnsTable">
+            <thead>
+              <tr><th>ID</th><th>Target</th><th>Sender</th><th>Reason</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="warnsBody"><tr><td colspan="5" class="muted">No data</td></tr></tbody>
+          </table>
+        </div>
+
+        <!-- Staff Tools (staff) -->
+        <div id="toolsPane" class="hidden">
+          <form class="form">
+            <div class="row">
+              <div class="field" style="max-width:220px;">
+                <div class="label">Server ID</div>
+                <input id="toolsTargetId" class="input" placeholder="e.g. 12" />
+              </div>
+            </div>
+            <div class="row">
+              <button type="button" id="btnTpTo"  class="btn">TP to</button>
+              <button type="button" id="btnBring" class="btn">Bring</button>
+              <button type="button" id="btnHeal"  class="btn">Heal</button>
+              <button type="button" id="btnRevive"class="btn">Revive</button>
+            </div>
+          </form>
+          <div class="muted" style="margin-top:6px;">Actions require QBCore admin/god or ACE admin.</div>
+        </div>
+
+        <!-- NEW: Live Logs (staff) -->
+        <div id="logsPane" class="hidden">
+          <div class="logs-tools">
+            <div class="field" style="max-width:240px;">
+              <div class="label">Filter</div>
+              <select id="logFilter" class="select">
+                <option value="">All</option>
+                <option value="KILL">Kills</option>
+                <option value="VDM">Vehicle hits</option>
+                <option value="DIED">Deaths</option>
+                <option value="CHAT_MESSAGES">Chat messages</option>
+              </select>
+            </div>
+            <button id="logsRefresh" class="btn">Refresh</button>
+            <button id="logsPause" class="btn">Pause</button>
+            <div class="muted" id="logsCount" style="margin-left:auto;">0 entries</div>
+          </div>
+
+          <table class="table" id="logsTable">
+            <thead>
+              <tr><th>Time</th><th>Type</th><th>Actor</th><th>Target</th><th>Info</th></tr>
+            </thead>
+            <tbody id="logsBody"><tr><td colspan="5" class="muted">Loading…</td></tr></tbody>
+          </table>
+        </div>
+
+      </div> <!-- /panel-content -->
+    </div>
+  </div>
+
+  <script>
+    const app = document.getElementById('app');
+    const closeBtn = document.getElementById('closeBtn');
+    const toast = document.getElementById('toast');
+    const resourceName = (window.GetParentResourceName) ? GetParentResourceName() : 'qb-warnings';
+
+    function show(el){ el.classList.remove('hidden') }
+    function hide(el){ el.classList.add('hidden') }
+    function setToast(msg, ok=true){
+      toast.textContent = msg;
+      toast.classList.remove('hidden','success','error');
+      toast.classList.add(ok ? 'success':'error');
+      clearTimeout(setToast._t);
+      setToast._t = setTimeout(()=> toast.classList.add('hidden'), 2200);
+    }
+
+    // Chat bubble renderer (defined BEFORE router to avoid "not defined")
+    function pushBubble(container, msg){
+      const b = document.createElement('div'); b.className = 'bubble ' + (msg.from === 'staff' ? 'staff' : '');
+      const m = document.createElement('div'); m.className = 'meta'; m.textContent =
+        `${msg.name} • ${new Date(msg.time*1000).toLocaleTimeString()}`;
+      const t = document.createElement('div'); t.textContent = msg.text;
+      b.appendChild(m); b.appendChild(t); container.appendChild(b);
+      container.scrollTop = container.scrollHeight;
+    }
+
+    // Tabs
+    const tabWarnings = document.getElementById('tabWarnings');
+    const tabReport   = document.getElementById('tabReport');
+    const tabManager  = document.getElementById('tabManager');
+    const tabWarnMgr  = document.getElementById('tabWarnMgr');
+    const tabTools    = document.getElementById('tabTools');
+    const tabLogs     = document.getElementById('tabLogs');
+
+    const warningsPane = document.getElementById('warningsPane');
+    const reportPane   = document.getElementById('reportPane');
+    const managerPane  = document.getElementById('managerPane');
+    const warnMgrPane  = document.getElementById('warnMgrPane');
+    const toolsPane    = document.getElementById('toolsPane');
+    const logsPane     = document.getElementById('logsPane');
+
+    let isStaff = false;
+    let selectedReportId = null;
+    let myReportId = null;
+
+    function unwatchCurrent(){
+      if (!selectedReportId) return;
+      fetch(`https://${resourceName}/managerUnwatch`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ reportId: selectedReportId })
+      });
+    }
+
+    function setTab(tab){
+      tabWarnings.classList.toggle('active', tab==='warnings');
+      tabReport.classList.toggle('active', tab==='report');
+      tabManager.classList.toggle('active', tab==='manager');
+      tabWarnMgr.classList.toggle('active', tab==='warnmgr');
+      tabTools.classList.toggle('active', tab==='tools');
+      tabLogs.classList.toggle('active', tab==='logs');
+
+      (tab==='warnings') ? show(warningsPane) : hide(warningsPane);
+      (tab==='report')   ? show(reportPane)   : hide(reportPane);
+      (tab==='manager')  ? show(managerPane)  : hide(managerPane);
+      (tab==='warnmgr')  ? show(warnMgrPane)  : hide(warnMgrPane);
+      (tab==='tools')    ? show(toolsPane)    : hide(toolsPane);
+      (tab==='logs')     ? show(logsPane)     : hide(logsPane);
+
+      if (tab==='warnings'){
+        show(loading); hide(list); show(empty); // empty shows, will hide after data
+        fetch(`https://${resourceName}/requestWarnings`, { method:'POST' });
+      } else if (tab==='manager'){
+        fetch(`https://${resourceName}/managerRequestList`, { method:'POST' });
+      } else if (tab==='warnmgr'){
+        fetch(`https://${resourceName}/getAllWarnings`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ query: (warnSearch?.value || '') }) });
+      } else if (tab==='logs'){
+        // ask server for history
+        fetch(`https://${resourceName}/logRequestHistory`, { method:'POST' });
+      } else {
+        // leaving manager -> stop watching
+        unwatchCurrent();
+        selectedReportId = null;
+        hide(mgrChatWrap); mgrTicketId.textContent = ''; mgrChat.innerHTML = ''; mgrChatInput.value = '';
+      }
+    }
+    tabWarnings.onclick = () => setTab('warnings');
+    tabReport.onclick   = () => setTab('report');
+    tabManager.onclick  = () => setTab('manager');
+    tabWarnMgr.onclick  = () => setTab('warnmgr');
+    tabTools.onclick    = () => setTab('tools');
+    tabLogs.onclick     = () => setTab('logs');
+
+    // Warnings (player)
+    const list = document.getElementById('list');
+    const loading = document.getElementById('loading');
+    const empty = document.getElementById('empty');
+
+    function renderWarnings(warnings){
+      list.innerHTML = '';
+      if (!warnings || !warnings.length){ hide(list); hide(loading); show(empty); return; }
+      show(list); hide(loading); hide(empty);
+
+      warnings.forEach((w, idx) => {
+        const li = document.createElement('li'); li.className='item';
+        const badge = document.createElement('div'); badge.className='badge'; badge.textContent=(idx+1);
+        const reason = document.createElement('div'); reason.className='reason';
+        const tt = document.createElement('div'); tt.className='tt'; tt.textContent = w.reason || 'No reason';
+        const meta = document.createElement('div'); meta.className='meta'; meta.textContent = `ID: ${w.warnId || 'N/A'}`;
+        reason.appendChild(tt); reason.appendChild(meta);
+        const actions = document.createElement('div'); actions.className='actions';
+        if (isStaff) {
+          const del = document.createElement('button'); del.className='btn btn-danger'; del.textContent='Delete';
+          del.onclick = () => fetch(`https://${resourceName}/deleteWarning`, {
+            method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ warnId: w.warnId })
+          });
+          actions.appendChild(del);
+        }
+        li.appendChild(badge); li.appendChild(reason); li.appendChild(actions);
+        list.appendChild(li);
+      });
+    }
+
+    // Report (player)
+    const targetId = document.getElementById('targetId');
+    const category = document.getElementById('category');
+    const details  = document.getElementById('details');
+    const submitReport = document.getElementById('submitReport');
+    submitReport.onclick = () => {
+      const payload = { targetId: targetId.value.trim(), category: category.value, details: details.value.trim() };
+      if (!payload.details){ setToast('Please add details.', false); return; }
+      fetch(`https://${resourceName}/submitReport`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    };
+
+    const myTicketWrap = document.getElementById('myTicket');
+    const myTicketStatus = document.getElementById('myTicketStatus');
+    const myChat = document.getElementById('myChat');
+    const myChatInput = document.getElementById('myChatInput');
+    const myChatSend = document.getElementById('myChatSend');
+    myChatSend.onclick = () => {
+      const txt = myChatInput.value.trim(); if (!txt || !myReportId) return;
+      fetch(`https://${resourceName}/reportMessage`, {
+        method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ reportId: myReportId, text: txt })
+      });
+      myChatInput.value = '';
+    };
+
+    // Report Manager
+    const refreshManager = document.getElementById('refreshManager');
+    const managerList = document.getElementById('managerList');
+    const mgrChatWrap = document.getElementById('managerChatWrap');
+    const mgrTicketId = document.getElementById('mgrTicketId');
+    const mgrChat = document.getElementById('mgrChat');
+    const mgrChatInput = document.getElementById('mgrChatInput');
+    const mgrChatSend = document.getElementById('mgrChatSend');
+    refreshManager.onclick = () => fetch(`https://${resourceName}/managerRequestList`, { method:'POST' });
+
+    function managerRow(r){
+      const li = document.createElement('li'); li.className='item';
+      const badge = document.createElement('div'); badge.className='badge'; badge.textContent = r.id;
+      const reason = document.createElement('div'); reason.className='reason';
+      const tt = document.createElement('div'); tt.className='tt'; tt.textContent = `[${r.status}] ${r.category || 'General'} - ${r.reporterName || 'Reporter'}`;
+      const meta = document.createElement('div'); meta.className='meta'; meta.textContent = `Claimed By: ${r.claimedByName || '—'}`;
+      reason.appendChild(tt); reason.appendChild(meta);
+
+      const actions = document.createElement('div'); actions.className='actions';
+      const btnClaim = document.createElement('button'); btnClaim.className='btn';
+      btnClaim.textContent = r.status === 'claimed' ? 'Unclaim' : 'Claim';
+      btnClaim.onclick = () => fetch(`https://${resourceName}/${r.status==='claimed'?'managerUnclaim':'managerClaim'}`, {
+        method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ reportId: r.id })
+      });
+
+      const btnTP = document.createElement('button'); btnTP.className='btn'; btnTP.textContent='TP';
+      btnTP.onclick = () => fetch(`https://${resourceName}/managerTeleport`, {
+        method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ reportId: r.id })
+      });
+
+      const btnBring = document.createElement('button'); btnBring.className='btn'; btnBring.textContent='Bring';
+      btnBring.onclick = () => fetch(`https://${resourceName}/managerBring`, {
+        method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ reportId: r.id })
+      });
+
+      const btnHeal = document.createElement('button'); btnHeal.className='btn'; btnHeal.textContent='Heal';
+      btnHeal.onclick = () => fetch(`https://${resourceName}/managerHeal`, {
+        method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ reportId: r.id })
+      });
+
+      const btnRevive = document.createElement('button'); btnRevive.className='btn'; btnRevive.textContent='Revive';
+      btnRevive.onclick = () => fetch(`https://${resourceName}/managerRevive`, {
+        method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ reportId: r.id })
+      });
+
+      const btnDel = document.createElement('button'); btnDel.className='btn btn-danger'; btnDel.textContent='Delete';
+      btnDel.onclick = () => fetch(`https://${resourceName}/managerDelete`, {
+        method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ reportId: r.id })
+      });
+
+      const btnChat = document.createElement('button'); btnChat.className='btn'; btnChat.textContent='Open Chat';
+      btnChat.onclick = () => {
+        selectedReportId = r.id;
+        mgrTicketId.textContent = r.id;
+        mgrChat.innerHTML = '';
+        show(mgrChatWrap);
+        // start watching & load history
+        fetch(`https://${resourceName}/managerWatch`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ reportId: r.id }) });
+        fetch(`https://${resourceName}/managerRequestChat`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ reportId: r.id }) });
+      };
+
+      [btnClaim, btnTP, btnBring, btnHeal, btnRevive, btnDel, btnChat].forEach(b => actions.appendChild(b));
+      li.appendChild(badge); li.appendChild(reason); li.appendChild(actions);
+      return li;
+    }
+
+    mgrChatSend.onclick = () => {
+      const txt = mgrChatInput.value.trim(); if (!txt || !selectedReportId) return;
+      fetch(`https://${resourceName}/reportMessage`, {
+        method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ reportId: selectedReportId, text: txt })
+      });
+      mgrChatInput.value = '';
+    };
+
+    // Warn Manager
+    const warnTargetId = document.getElementById('warnTargetId');
+    const warnReason = document.getElementById('warnReason');
+    const createWarningBtn = document.getElementById('createWarningBtn');
+    const warnSearch = document.getElementById('warnSearch');
+    const refreshWarns = document.getElementById('refreshWarns');
+    const warnsBody = document.getElementById('warnsBody');
+
+    createWarningBtn.onclick = () => {
+      const payload = { targetId: warnTargetId.value.trim(), reason: warnReason.value.trim() };
+      if (!payload.targetId || !payload.reason) { setToast('Player ID and reason required.', false); return; }
+      fetch(`https://${resourceName}/createWarning`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    };
+    const requestAllWarns = () => {
+      fetch(`https://${resourceName}/getAllWarnings`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ query: warnSearch.value.trim() }) });
+    };
+    refreshWarns.onclick = requestAllWarns;
+    warnSearch.addEventListener('keydown', (e)=>{ if (e.key==='Enter') requestAllWarns(); });
+
+    function renderAllWarnings(rows){
+      warnsBody.innerHTML = '';
+      if (!rows || !rows.length){ warnsBody.innerHTML = '<tr><td colspan="5" class="muted">No data</td></tr>'; return; }
+      rows.forEach(r => {
+        const tr = document.createElement('tr');
+        const tdId = document.createElement('td'); tdId.textContent = r.warnId;
+        const tdTg = document.createElement('td'); tdTg.textContent = r.targetIdentifier || 'n/a';
+        const tdSd = document.createElement('td'); tdSd.textContent = r.senderIdentifier || 'n/a';
+        const tdRn = document.createElement('td'); tdRn.textContent = r.reason || '';
+        const tdAc = document.createElement('td');
+        const del = document.createElement('button'); del.className='btn btn-danger'; del.textContent='Delete';
+        del.onclick = () => fetch(`https://${resourceName}/deleteWarning`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ warnId: r.warnId }) });
+        tdAc.appendChild(del);
+        [tdId, tdTg, tdSd, tdRn, tdAc].forEach(td => tr.appendChild(td));
+        warnsBody.appendChild(tr);
+      });
+    }
+
+    // Staff Tools
+    const toolsTargetId = document.getElementById('toolsTargetId');
+    const btnTpTo  = document.getElementById('btnTpTo');
+    const btnBring = document.getElementById('btnBring');
+    const btnHeal  = document.getElementById('btnHeal');
+    const btnRevive= document.getElementById('btnRevive');
+    function act(action){
+      const targetId = toolsTargetId.value.trim();
+      if (!targetId) { setToast('Enter Server ID', false); return; }
+      fetch(`https://${resourceName}/staffAction`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action, targetId }) });
+    }
+    btnTpTo.onclick   = ()=> act('tpTo');
+    btnBring.onclick  = ()=> act('bring');
+    btnHeal.onclick   = ()=> act('heal');
+    btnRevive.onclick = ()=> act('revive');
+
+    // ---- Logs (staff) ----
+    const logsBody   = document.getElementById('logsBody');
+    const logsCount  = document.getElementById('logsCount');
+    const logsFilter = document.getElementById('logFilter');
+    const logsRefresh= document.getElementById('logsRefresh');
+    const logsPause  = document.getElementById('logsPause');
+    let logsPaused = false;
+    let logsCache  = [];
+
+    function renderLogs(entries){
+      const f = logsFilter.value;
+      const rows = f ? entries.filter(e => e.kind === f) : entries;
+      logsBody.innerHTML = '';
+      if (!rows.length){
+        logsBody.innerHTML = '<tr><td colspan="5" class="muted">No entries</td></tr>';
+      } else {
+        rows.slice().reverse().forEach(e => {
+          const tr = document.createElement('tr');
+          const tdT = document.createElement('td'); tdT.textContent = new Date((e.ts||e.time||0)*1000).toLocaleTimeString();
+          const tdK = document.createElement('td'); tdK.textContent = e.kind || e.type || '';
+          const tdA = document.createElement('td'); tdA.textContent = (e.actor && (e.actor.name||e.actor.id)) || e.player || '';
+          const tdG = document.createElement('td'); tdG.textContent = (e.target && (e.target.name||e.target.id)) || e.victim || '';
+          const tdI = document.createElement('td'); tdI.textContent = JSON.stringify(e.info || e.extra || {});
+          [tdT, tdK, tdA, tdG, tdI].forEach(td => tr.appendChild(td));
+          logsBody.appendChild(tr);
+        });
+      }
+      logsCount.textContent = `${entries.length} entries`;
+    }
+
+    logsRefresh.onclick = () => fetch(`https://${resourceName}/logRequestHistory`, { method:'POST' });
+    logsPause.onclick   = () => { logsPaused = !logsPaused; logsPause.textContent = logsPaused ? 'Resume' : 'Pause'; };
+    logsFilter.onchange = () => renderLogs(logsCache);
+
+    // Buttons
+    closeBtn.onclick = () => { unwatchCurrent(); fetch(`https://${resourceName}/close`, { method:'POST' }); };
+
+    // Router
+    window.addEventListener('message', (e) => {
+      const d = e.data || {};
+      switch(d.action){
+        case 'open':
+          show(app);
+          setTab(d.tab || 'warnings');
+          show(loading); hide(list); show(empty);
+          break;
+
+        case 'init':
+          isStaff = !!d.isStaff;
+          if (isStaff) { show(tabManager); show(tabWarnMgr); show(tabTools); show(tabLogs); }
+          if (d.myReport && d.myReport.id) {
+            myReportId = d.myReport.id;
+            show(myTicketWrap);
+            myTicketStatus.textContent = `${d.myReport.status.toUpperCase()}${d.myReport.claimedByName ? ' • ' + d.myReport.claimedByName : ''}`;
+          } else {
+            myReportId = null; hide(myTicketWrap); myChat.innerHTML = ''; myChatInput.value = '';
+          }
+          break;
+
+        case 'setWarnings': renderWarnings(d.warnings || []); break;
+        case 'notify': setToast(d.success ? 'Action done' : 'Permission denied / error', !!d.success); break;
+
+        case 'managerList': {
+          managerList.innerHTML = '';
+          const reports = d.reports || [];
+          reports.forEach(r => managerList.appendChild(managerRow(r)));
+          if (selectedReportId && !reports.some(r => r.id === selectedReportId)) {
+            unwatchCurrent(); selectedReportId = null; hide(mgrChatWrap); mgrTicketId.textContent = ''; mgrChat.innerHTML = ''; mgrChatInput.value = '';
+          }
+          break;
+        }
+
+        case 'managerUpdate':
+          if (d.report && d.report.deleted && selectedReportId === d.report.id) {
+            unwatchCurrent(); selectedReportId = null; hide(mgrChatWrap); mgrTicketId.textContent = ''; mgrChat.innerHTML = ''; mgrChatInput.value = ''; setToast('Report deleted', true);
+          }
+          fetch(`https://${resourceName}/managerRequestList`, { method:'POST' });
+          break;
+
+        case 'myReport':
+          if (!d.myReport) {
+            myReportId = null; hide(myTicketWrap); myChat.innerHTML = ''; myChatInput.value = '';
+          } else {
+            myReportId = d.myReport.id; show(myTicketWrap);
+            myTicketStatus.textContent = `${d.myReport.status.toUpperCase()}${d.myReport.claimedByName ? ' • ' + d.myReport.claimedByName : ''}`;
+          }
+          break;
+
+        case 'chatMessage':
+          if (d.msg.reportId === myReportId) pushBubble(myChat, d.msg);
+          if (d.msg.reportId === selectedReportId) pushBubble(mgrChat, d.msg);
+          break;
+
+        case 'chatHistory':
+          if (selectedReportId === d.reportId) { mgrChat.innerHTML = ''; (d.history || []).forEach(msg => pushBubble(mgrChat, msg)); }
+          break;
+
+        case 'warnResult':
+          setToast(d.message || (d.success ? 'Warning created.' : 'Failed to create warning'), !!d.success);
+          if (d.success) { warnReason.value = ''; warnTargetId.value = ''; }
+          break;
+
+        case 'allWarnings':
+          renderAllWarnings(d.rows || []);
+          break;
+
+        case 'warnsDirty':
+          if (tabWarnMgr.classList.contains('active')) {
+            fetch(`https://${resourceName}/getAllWarnings`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ query: (warnSearch?.value || '') }) });
+          }
+          break;
+
+        // ---- Logs messages ----
+        case 'logHistory':
+          logsCache = d.entries || [];
+          if (tabLogs.classList.contains('active')) renderLogs(logsCache);
+          break;
+
+        case 'logEvent':
+          if (!Array.isArray(logsCache)) logsCache = [];
+          logsCache.push(d.entry);
+          if (logsCache.length > 500) logsCache.shift();
+          if (!logsPaused && tabLogs.classList.contains('active')) renderLogs(logsCache);
+          break;
+
+        case 'close':
+          unwatchCurrent();
+          hide(app);
+          break;
+      }
+    });
+  </script>
+</body>
+</html>
